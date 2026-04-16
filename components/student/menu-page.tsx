@@ -1,28 +1,46 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { QueueXLogo } from "@/components/queuex-logo"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import {
   useAppStore,
-  getMenuItemsByOutlet,
   addToCart,
   navigate,
 } from "@/lib/store"
-import { Search, ShoppingCart, ArrowLeft, Clock, Plus } from "lucide-react"
+import { apiClient, MenuItem } from "@/lib/api-client"
+import { Search, ShoppingCart, ArrowLeft, Clock, Plus, Loader2 } from "lucide-react"
 import Image from "next/image"
 
 export function MenuPage() {
   const { selectedOutlet, cart } = useAppStore()
   const [search, setSearch] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("All")
+  const [items, setItems] = useState<MenuItem[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState("")
 
-  const items = useMemo(
-    () => getMenuItemsByOutlet(selectedOutlet || ""),
-    [selectedOutlet]
-  )
+  useEffect(() => {
+    async function loadMenu() {
+      if (!selectedOutlet) return
+      try {
+        // Get the outlet from localStorage to get its ID
+        const outletData = localStorage.getItem("selected_outlet")
+        if (!outletData) return
+        
+        const outlet = JSON.parse(outletData)
+        const data = await apiClient.getMenu(outlet.id)
+        setItems(data)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load menu")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    loadMenu()
+  }, [selectedOutlet])
 
   const categories = useMemo(
     () => ["All", ...Array.from(new Set(items.map((i) => i.category)))],
@@ -38,6 +56,27 @@ export function MenuPage() {
   }, [items, selectedCategory, search])
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
+
+  if (isLoading) {
+    return (
+      <div className="gradient-bg flex min-h-screen items-center justify-center p-6">
+        <div className="glass-strong flex flex-col items-center gap-4 rounded-2xl p-10 text-center shadow-lg">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-foreground">Loading menu...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="gradient-bg flex min-h-screen items-center justify-center p-6">
+        <div className="glass-strong flex flex-col items-center gap-4 rounded-2xl p-10 text-center shadow-lg">
+          <p className="text-destructive">{error}</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="gradient-bg min-h-screen p-4 pb-24 lg:p-6 lg:pb-6">
@@ -112,14 +151,11 @@ export function MenuPage() {
                 key={item.id}
                 className="glass-strong group overflow-hidden rounded-2xl shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
               >
-                <div className="relative aspect-[4/3] overflow-hidden">
-                  <Image
-                    src={item.image}
-                    alt={item.name}
-                    fill
-                    className="object-cover transition-transform duration-300 group-hover:scale-105"
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                  />
+                <div className="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+                  <div className="text-center">
+                    <p className="text-3xl">🍲</p>
+                    <p className="text-xs text-muted-foreground mt-2">{item.category}</p>
+                  </div>
                   <div className="absolute top-3 left-3">
                     <Badge variant="secondary" className="glass rounded-lg text-xs font-medium text-foreground">
                       {item.category}
@@ -128,19 +164,14 @@ export function MenuPage() {
                 </div>
                 <div className="p-4">
                   <h3 className="text-base font-semibold text-foreground">{item.name}</h3>
-                  <div className="mt-2 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg font-bold text-primary">
-                        {"₹"}{item.price}
-                      </span>
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Clock size={12} />
-                        {item.prepTime}
-                      </span>
-                    </div>
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.description}</p>
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="text-lg font-bold text-primary">
+                      {"₹"}{item.price}
+                    </span>
                     <Button
                       size="sm"
-                      onClick={() => addToCart(item)}
+                      onClick={() => addToCart({ ...item, outlet: selectedOutlet || "", prepTime: "10 min", image: "", quantity: 0 })}
                       className={`h-8 rounded-lg text-xs font-medium ${
                         inCart
                           ? "bg-accent text-accent-foreground hover:bg-accent/90"
