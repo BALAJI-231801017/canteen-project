@@ -6,16 +6,34 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { login, adminLogin } from "@/lib/store"
+import { apiClient } from "@/lib/api-client"
 import { GraduationCap, Lock, ArrowRight } from "lucide-react"
 
 export function LoginPage() {
-  const [collegeId, setCollegeId] = useState("")
+  const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
 
-  function handleLogin(e: React.FormEvent) {
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
-    if (collegeId.trim() && password.trim()) {
-      login(collegeId)
+    setError("")
+    
+    if (!email.trim() || !password.trim()) {
+      setError("Please enter both email and password")
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const user = await apiClient.login(email, password)
+      // Save user to localStorage for persistence
+      localStorage.setItem("queuex_user", JSON.stringify(user))
+      login(user.id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed")
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -34,18 +52,26 @@ export function LoginPage() {
         </div>
 
         <form onSubmit={handleLogin} className="flex flex-col gap-5">
+          {error && (
+            <div className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+          
           <div className="flex flex-col gap-2">
-            <Label htmlFor="college-id" className="text-sm font-medium text-foreground">
-              College ID
+            <Label htmlFor="email" className="text-sm font-medium text-foreground">
+              Email
             </Label>
             <div className="relative">
               <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
               <Input
-                id="college-id"
-                placeholder="Enter your College ID"
-                value={collegeId}
-                onChange={(e) => setCollegeId(e.target.value)}
+                id="email"
+                type="email"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="h-12 rounded-xl border-border bg-secondary/50 pl-10 text-foreground placeholder:text-muted-foreground focus:border-primary"
+                disabled={isLoading}
               />
             </div>
           </div>
@@ -63,16 +89,18 @@ export function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="h-12 rounded-xl border-border bg-secondary/50 pl-10 text-foreground placeholder:text-muted-foreground focus:border-primary"
+                disabled={isLoading}
               />
             </div>
           </div>
 
           <Button
             type="submit"
-            className="gradient-primary mt-2 h-12 rounded-xl text-base font-semibold text-primary-foreground shadow-lg transition-all hover:opacity-90 hover:shadow-xl"
+            disabled={isLoading}
+            className="gradient-primary mt-2 h-12 rounded-xl text-base font-semibold text-primary-foreground shadow-lg transition-all hover:opacity-90 hover:shadow-xl disabled:opacity-50"
           >
-            Sign In as Student
-            <ArrowRight className="ml-2" size={18} />
+            {isLoading ? "Signing In..." : "Sign In as Student"}
+            {!isLoading && <ArrowRight className="ml-2" size={18} />}
           </Button>
         </form>
 

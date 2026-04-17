@@ -3,18 +3,57 @@
 import { useState, useEffect } from "react"
 import { QueueXLogo } from "@/components/queuex-logo"
 import { Button } from "@/components/ui/button"
-import { useAppStore, navigate, updateOrderStatus } from "@/lib/store"
-import { CheckCircle2, Circle, Package, ChefHat, Clock } from "lucide-react"
+import { useAppStore, navigate } from "@/lib/store"
+import { apiClient, Order } from "@/lib/api-client"
+import { CheckCircle2, Circle, Package, ChefHat, Clock, Loader2 } from "lucide-react"
 
 const statusSteps = [
-  { key: "placed", label: "Order Placed", icon: Package },
+  { key: "pending", label: "Order Placed", icon: Package },
   { key: "preparing", label: "Preparing", icon: ChefHat },
   { key: "ready", label: "Ready for Pickup", icon: CheckCircle2 },
 ] as const
 
 export function TrackingPage() {
-  const { currentOrder } = useAppStore()
+  const [currentOrder, setCurrentOrder] = useState<Order | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    async function loadOrder() {
+      try {
+        const orderData = localStorage.getItem("current_order")
+        if (!orderData) {
+          setIsLoading(false)
+          return
+        }
+        
+        const order = JSON.parse(orderData)
+        const data = await apiClient.getOrder(order.id)
+        setCurrentOrder(data.order)
+      } catch (err) {
+        console.error("Failed to load order:", err)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    loadOrder()
+  }, [])
+
+  useEffect(() => {
+    if (!currentOrder) return
+    
+    // Auto-refresh order status every 10 seconds
+    const refreshInterval = setInterval(async () => {
+      try {
+        const data = await apiClient.getOrder(currentOrder.id)
+        setCurrentOrder(data.order)
+      } catch (err) {
+        console.error("Failed to refresh order:", err)
+      }
+    }, 10000)
+    
+    return () => clearInterval(refreshInterval)
+  }, [currentOrder])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -23,16 +62,16 @@ export function TrackingPage() {
     return () => clearInterval(interval)
   }, [])
 
-  // Auto-advance status for demo
-  useEffect(() => {
-    if (!currentOrder) return
-    if (currentOrder.status === "placed" && elapsed >= 5) {
-      updateOrderStatus(currentOrder.id, "preparing")
-    }
-    if (currentOrder.status === "preparing" && elapsed >= 12) {
-      updateOrderStatus(currentOrder.id, "ready")
-    }
-  }, [elapsed, currentOrder])
+  if (isLoading) {
+    return (
+      <div className="gradient-bg flex min-h-screen items-center justify-center p-6">
+        <div className="glass-strong flex flex-col items-center gap-4 rounded-2xl p-10 text-center shadow-lg">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-foreground">Loading order...</p>
+        </div>
+      </div>
+    )
+  }
 
   if (!currentOrder) {
     return (

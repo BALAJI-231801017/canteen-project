@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAppStore, placeOrder, navigate } from "@/lib/store"
+import { apiClient, OrderItem } from "@/lib/api-client"
 import { ArrowLeft, Smartphone, CheckCircle2, Shield } from "lucide-react"
 
 export function PaymentPage() {
@@ -13,13 +14,50 @@ export function PaymentPage() {
   const [upiId, setUpiId] = useState("")
   const [paying, setPaying] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [error, setError] = useState("")
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
 
-  function handlePay(e: React.FormEvent) {
+  async function handlePay(e: React.FormEvent) {
     e.preventDefault()
     if (!upiId.trim()) return
+    
+    setError("")
     setPaying(true)
+
+    try {
+      // Get user from localStorage
+      const userData = localStorage.getItem("queuex_user")
+      const outletData = localStorage.getItem("selected_outlet")
+      
+      if (!userData || !outletData) {
+        throw new Error("User or outlet information missing")
+      }
+
+      const user = JSON.parse(userData)
+      const outlet = JSON.parse(outletData)
+
+      // Convert cart items to OrderItem format
+      const items: OrderItem[] = cart.map((item) => ({
+        menu_item_id: item.id,
+        quantity: item.quantity,
+        price: item.price,
+      }))
+
+      // Create the order via API
+      const order = await apiClient.createOrder(user.id, outlet.id, total, items)
+      
+      // Save current order to localStorage
+      localStorage.setItem("current_order", JSON.stringify(order))
+      
+      // Simulate payment success
+      setTimeout(() => {
+        setSuccess(true)
+      }, 1500)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Order creation failed")
+      setPaying(false)
+    }
   }
 
   useEffect(() => {
@@ -97,6 +135,12 @@ export function PaymentPage() {
 
         {/* UPI Form */}
         <form onSubmit={handlePay} className="glass-strong rounded-2xl p-6 shadow-md">
+          {error && (
+            <div className="mb-4 rounded-xl bg-destructive/10 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+          
           <div className="mb-5 flex items-center gap-3 rounded-xl bg-primary/5 p-3">
             <Smartphone size={20} className="text-primary" />
             <span className="text-sm font-medium text-foreground">UPI Payment</span>
@@ -112,14 +156,16 @@ export function PaymentPage() {
               value={upiId}
               onChange={(e) => setUpiId(e.target.value)}
               className="h-12 rounded-xl border-border bg-secondary/50 text-foreground placeholder:text-muted-foreground"
+              disabled={paying}
             />
           </div>
 
           <Button
             type="submit"
-            className="gradient-primary mt-6 h-14 w-full rounded-2xl text-base font-semibold text-primary-foreground shadow-lg hover:opacity-90"
+            disabled={paying}
+            className="gradient-primary mt-6 h-14 w-full rounded-2xl text-base font-semibold text-primary-foreground shadow-lg hover:opacity-90 disabled:opacity-50"
           >
-            Pay Now {"₹"}{total}
+            {paying ? "Processing..." : `Pay Now ₹${total}`}
           </Button>
 
           <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
