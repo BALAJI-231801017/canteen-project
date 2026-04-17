@@ -1,10 +1,13 @@
 import pg from 'pg';
 const { Pool } = pg;
 
+let connectionString = process.env.POSTGRES_URL;
+if (connectionString) {
+  connectionString = connectionString.replace(/sslmode=require/, 'sslmode=no-verify');
+}
+
 const pool = new Pool({
-  connectionString: process.env.POSTGRES_URL,
-  ssl: 'require',
-  rejectUnauthorized: false,
+  connectionString,
 });
 
 try {

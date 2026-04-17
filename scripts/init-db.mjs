@@ -5,8 +5,13 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+let connectionString = process.env.POSTGRES_URL;
+if (connectionString) {
+  connectionString = connectionString.replace(/sslmode=require/, 'sslmode=no-verify');
+}
+
 const pool = new Pool({
-  connectionString: process.env.POSTGRES_URL,
+  connectionString,
 });
 
 async function readAndExecuteSql(filePath) {
